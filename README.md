@@ -127,6 +127,12 @@ python train.py --mode=eval
 
 Results will be saved under the folder srgan/samples/. 
 
+### Predict on test data
+Predict on each test image in `test_images` folder:
+```bash
+python train.py --mode=predict --predict-dir-path=test_images
+```
+
 ### Results
 
 <a href="http://tensorlayer.readthedocs.io">

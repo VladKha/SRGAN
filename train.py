@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+
 os.environ['TL_BACKEND'] = 'tensorflow' # Just modify this line, easily switch to any framework! PyTorch will coming soon!
 # os.environ['TL_BACKEND'] = 'mindspore'
 # os.environ['TL_BACKEND'] = 'paddle'
@@ -21,7 +23,7 @@ batch_size = 8
 n_epoch_init = config.TRAIN.n_epoch_init
 n_epoch = config.TRAIN.n_epoch
 # create folders to save result images and trained models
-save_dir = "samples"
+save_dir = "predictions"
 tlx.files.exists_or_mkdir(save_dir)
 checkpoint_dir = "models"
 tlx.files.exists_or_mkdir(checkpoint_dir)
@@ -34,11 +36,11 @@ nor = Compose([Normalize(mean=(127.5), std=(127.5), data_format='HWC'),
               HWC2CHW()])
 lr_transform = Resize(size=(96, 96))
 
-train_hr_imgs = tlx.vision.load_images(path=config.TRAIN.hr_img_path, n_threads = 32)
-
 class TrainData(Dataset):
 
     def __init__(self, hr_trans=hr_transform, lr_trans=lr_transform):
+        train_hr_imgs = tlx.vision.load_images(path=config.TRAIN.hr_img_path, n_threads=32)
+
         self.train_hr_imgs = train_hr_imgs
         self.hr_trans = hr_trans
         self.lr_trans = lr_trans
@@ -197,20 +199,67 @@ def evaluate():
     tlx.vision.save_image(out_bicu, file_name='valid_hr_cubic.png', path=save_dir)
 
 
+def predict_image(file_path: Path, model):
+    hr_img = tlx.vision.load_image(str(file_path))
+    lr_img = np.asarray(hr_img)
+    hr_size1 = [lr_img.shape[0], lr_img.shape[1]]
+    lr_img = cv2.resize(lr_img, dsize=(hr_size1[1] // 4, hr_size1[0] // 4))
+    lr_img_tensor = (lr_img / 127.5) - 1  # rescale to ［－1, 1]
+
+    lr_img_tensor = np.asarray(lr_img_tensor, dtype=np.float32)
+    lr_img_tensor = np.transpose(lr_img_tensor, axes=[2, 0, 1])
+    lr_img_tensor = lr_img_tensor[np.newaxis, :, :, :]
+    lr_img_tensor = tlx.ops.convert_to_tensor(lr_img_tensor)
+    size = [lr_img.shape[0], lr_img.shape[1]]
+
+    generated_img = tlx.ops.convert_to_numpy(model(lr_img_tensor))
+    generated_img = np.asarray((generated_img + 1) * 127.5, dtype=np.uint8)
+    generated_img = np.transpose(generated_img[0], axes=[1, 2, 0])
+    print(f"Low Resolution size: {size} /  generated High Resolution size: {generated_img.shape}")
+
+    generated_interpolation = cv2.resize(lr_img, dsize=[size[1] * 4, size[0] * 4], interpolation=cv2.INTER_CUBIC)
+
+    return generated_img, lr_img, hr_img, generated_interpolation
+
+
+def predict(dir_path: str):
+    # load generator model
+    G.load_weights(os.path.join(checkpoint_dir, 'g.npz'), format='npz_dict')
+    G.set_eval()
+
+    # for each file in directory upscale the image
+    path = Path(dir_path)
+    for file_path in path.iterdir():
+        if file_path.is_file() and file_path.suffix in ['.png', '.jpg', '.jpeg']:
+            print(f'Upscalling {file_path}..')
+            generated, original_lr, original_hr, generated_interpolation  = predict_image(file_path, G)
+
+            file_name = file_path.name.split('.')[0]
+            tlx.vision.save_image(generated, file_name=f'{file_name}_generated.png', path=save_dir)
+            tlx.vision.save_image(original_lr, file_name=f'{file_name}_original_low_resolution.png', path=save_dir)
+            tlx.vision.save_image(original_hr, file_name=f'{file_name}_original_high_resolution.png', path=save_dir)
+            tlx.vision.save_image(generated_interpolation, file_name=f'{file_name}_generated_interpolation.png', path=save_dir)
+
+
 if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--mode', type=str, default='train', help='train, eval')
+    parser.add_argument('--mode', type=str, default='train', help='train, eval, predict')
+    parser.add_argument('--predict-dir-path', type=str, default='test_images',
+                        help='path to directory with image to use for prediction')
 
     args = parser.parse_args()
 
     tlx.global_flag['mode'] = args.mode
+    test_dir_path = args.predict_dir_path
 
     if tlx.global_flag['mode'] == 'train':
         train()
     elif tlx.global_flag['mode'] == 'eval':
         evaluate()
+    elif tlx.global_flag['mode'] == 'predict':
+        predict(test_dir_path)
     else:
-        raise Exception("Unknow --mode")
+        raise Exception("Unknown --mode")

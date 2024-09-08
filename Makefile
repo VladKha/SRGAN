@@ -36,5 +36,8 @@ download_models:
 #	unzip DIV2K_valid_HR.zip
 #	unzip DIV2K_valid_LR_bicubic_X4.zip
 
+predict:
+	@echo "Predicting test images..."
+	python train.py --mode=predict --predict-dir-path=test_images
 
-all: make_virtualenv install_dependencies download_models
+all: make_virtualenv install_dependencies download_models predict
