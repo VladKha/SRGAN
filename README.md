@@ -21,6 +21,12 @@
 </div>
 </a>
 
+### Setup dev environment
+Create new virtual env, install dependencies and download models:
+```bash
+make setup_dev_env
+```
+
 ### Prepare Data and Pre-trained VGG
 
 - 1. You need to download the pretrained VGG19 model weights in [here](https://drive.google.com/file/d/1CLw6Cn3yNI1N15HyX99_Zy9QnDcgP3q7/view?usp=sharing).
@@ -131,6 +137,10 @@ Results will be saved under the folder srgan/samples/.
 Predict on each test image in `test_images` folder:
 ```bash
 python train.py --mode=predict --predict-dir-path=test_images
+```
+or
+```bash
+make predict
 ```
 
 ### Results

@@ -21,6 +21,8 @@ download_models:
 	mkdir model										; \
 	cp models/vgg19.npy model
 
+setup_dev_env: make_virtualenv install_dependencies download_models
+
 # only needed for training/validation
 #download_data:
 #	mkdir DIV2K
@@ -40,4 +42,4 @@ predict:
 	@echo "Predicting test images..."
 	python train.py --mode=predict --predict-dir-path=test_images
 
-all: make_virtualenv install_dependencies download_models predict
+all: setup_dev_env predict
